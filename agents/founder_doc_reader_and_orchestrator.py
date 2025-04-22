@@ -9,9 +9,9 @@ from agents.llm_embed_gap_match_chat import (
     match_founder_to_vcs,
     analyze_gap
 )
-from agents.utils import safe_truncate_text  # corrected: no extract_text_from_file or convert_pdf_to_text
+from agents.utils import safe_truncate_text
 from agents.relationship_agent import build_relationship_graph
-from agents.visualization_agent import generate_tsne_plot  # corrected import name
+from agents.visualization_agent import generate_cluster_plot  # ✅ Corrected import
 from agents.similar_company_agent import find_similar_companies
 
 logger = logging.getLogger(__name__)
@@ -40,11 +40,11 @@ def run_full_pipeline(founder_doc_bytes, vc_urls):
         gap_insights = analyze_gap(founder_summary, [vc['summary'] for vc in vc_summaries])
         similar_companies = find_similar_companies(founder_embedding, vc_embeddings)
 
-        cluster_plot = generate_tsne_plot(
+        cluster_plot = generate_cluster_plot(  # ✅ Function name must match export
             {vc['url']: vc['embedding'] for vc in vc_embeddings},
-            [i for i in range(len(vc_embeddings))],  # dummy clusters for now
+            [i for i in range(len(vc_embeddings))],  # Placeholder clusters
             {vc['url']: vc['summary'] for vc in vc_summaries},
-            {i: {"theme": f"Cluster {i}"} for i in range(len(vc_embeddings))}  # dummy cluster themes
+            {i: {"theme": f"Cluster {i}"} for i in range(len(vc_embeddings))}  # Placeholder themes
         )
         relationship_plot = build_relationship_graph(vc_embeddings)
 
