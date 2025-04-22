@@ -3,35 +3,33 @@ import base64
 import logging
 import docx2txt
 from PyPDF2 import PdfReader
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
-def load_documents_as_text(file_paths):
-    text_blobs = []
-    for file_path in file_paths:
+def load_documents_as_text(uploaded_files):
+    texts = []
+    for uploaded_file in uploaded_files:
+        filename = uploaded_file.name
         try:
-            if file_path.endswith(".txt"):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    text_blobs.append(f.read())
-            elif file_path.endswith(".docx"):
-                text_blobs.append(docx2txt.process(file_path))
-            elif file_path.endswith(".pdf"):
-                reader = PdfReader(file_path)
-                text = "\n".join([page.extract_text() for page in reader.pages if page.extract_text()])
-                text_blobs.append(text)
+            if filename.endswith(".txt"):
+                texts.append(uploaded_file.read().decode("utf-8"))
+            elif filename.endswith(".docx"):
+                with open("/tmp/temp.docx", "wb") as f:
+                    f.write(uploaded_file.read())
+                text = docx2txt.process("/tmp/temp.docx")
+                texts.append(text)
+            elif filename.endswith(".pdf"):
+                with open("/tmp/temp.pdf", "wb") as f:
+                    f.write(uploaded_file.read())
+                reader = PdfReader("/tmp/temp.pdf")
+                text = "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
+                texts.append(text)
             else:
-                logger.warning(f"Unsupported file format: {file_path}")
+                texts.append(uploaded_file.read().decode("utf-8", errors="ignore"))
         except Exception as e:
-            logger.error(f"Error reading file {file_path}: {e}")
-    return text_blobs
-
-def encode_file_to_base64(file_path):
-    try:
-        with open(file_path, "rb") as f:
-            return base64.b64encode(f.read()).decode("utf-8")
-    except Exception as e:
-        logger.error(f"Failed to encode file {file_path} to base64: {e}")
-        return None
+            logger.warning(f"Failed to load file {filename}: {e}")
+    return texts
 
 def safe_truncate_text(text, max_tokens, encoding_name="cl100k_base"):
     try:
@@ -41,5 +39,11 @@ def safe_truncate_text(text, max_tokens, encoding_name="cl100k_base"):
         return enc.decode(tokens[:max_tokens])
     except Exception as e:
         logger.warning(f"Failed to truncate text safely: {e}")
-        return text[:4000]  # Safe fallback
+        return text[:4000]  # Fallback slice
 
+def ensure_numpy_array(embedding):
+    if isinstance(embedding, list):
+        return np.array(embedding)
+    elif hasattr(embedding, 'tolist'):
+        return np.array(embedding.tolist())
+    return embedding
