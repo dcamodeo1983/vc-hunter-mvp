@@ -1,91 +1,92 @@
+# app.py
 
 import streamlit as st
 import os
 import logging
-from dotenv import load_dotenv
-from agents.founder_doc_reader_and_orchestrator import run_orchestration, run_chat_agent
+from llm_embed_gap_match_chat import (
+    load_or_generate_embeddings,
+    generate_chatbot_response,
+)
+from founder_doc_reader_and_orchestrator import run_full_pipeline
 
-# Load environment
-load_dotenv()
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
-# Setup Streamlit
-st.set_page_config(page_title="VC Hunter", layout="wide")
-st.title("🧠 VC Hunter – Startup to VC Match Analysis")
-logger = logging.getLogger(__name__)
+# Configure logging
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-if not openai_api_key:
-    st.error("OPENAI_API_KEY not found. Please set it in a .env file or your environment.")
+# Set OpenAI API Key
+if "OPENAI_API_KEY" not in os.environ:
+    st.error("OpenAI API key not found. Please set it as an environment variable 'OPENAI_API_KEY'.")
     st.stop()
 
-# Upload section
-st.subheader("📥 Upload Your Founder Document")
-uploaded_files = st.file_uploader("Upload .pdf, .txt, or .docx", type=["pdf", "txt", "docx"], accept_multiple_files=True)
-if uploaded_files:
-    st.session_state["founder_docs"] = uploaded_files
+# Streamlit UI
+st.set_page_config(page_title="VC Hunter", layout="wide")
+st.title("🚀 VC Hunter: Founder Intelligence App")
 
-# Load VC URLs
-vc_urls = []
-if os.path.exists("vc_urls.txt"):
-    with open("vc_urls.txt") as f:
-        vc_urls = [url.strip() for url in f.readlines()]
-else:
-    st.error("Missing vc_urls.txt. Please add VC URLs to analyze.")
-    st.stop()
+st.markdown("""
+This app analyzes your startup's white paper and matches it with top venture capital firms based on their actual portfolio behavior and investment focus.
+""")
 
-# Run section
-if st.button("🚀 Run VC Analysis"):
-    if "founder_docs" not in st.session_state or not st.session_state["founder_docs"]:
-        st.warning("Please upload your white paper or concept document before running the analysis.")
-    else:
-        with st.spinner("Running full VC landscape analysis..."):
+# Founder document upload
+uploaded_file = st.file_uploader("Upload your startup white paper (PDF or text file)", type=["pdf", "txt"])
+
+# VC URLs: hardcoded list for now
+vc_urls = [
+    "https://a16z.com", "https://luxcapital.com", "https://foundersfund.com", "https://8vc.com",
+    "https://firstround.com", "https://sequoiacap.com", "https://benchmark.com", "https://union.vc",
+    "https://cofoundpartners.com", "https://drivecapital.com", "https://lightspeedvp.com", "https://root.vc",
+    "https://wing.vc", "https://greylock.com", "https://signalfire.com", "https://accel.com",
+    "https://boldstart.vc", "https://initialized.com", "https://craftventures.com", "https://upfront.com"
+]
+
+if uploaded_file is not None:
+    st.success("White paper uploaded successfully.")
+    run_button = st.button("Run Analysis")
+
+    if run_button:
+        with st.spinner("Running full founder-to-VC analysis... this may take a few minutes"):
             try:
-                results = run_orchestration(st.session_state["founder_docs"], vc_urls)
-                st.session_state["results"] = results
-                st.success("✅ Analysis complete!")
+                founder_bytes = uploaded_file.read()
+                results = run_full_pipeline(
+                    founder_doc_bytes=founder_bytes,
+                    vc_urls=vc_urls
+                )
+                logger.info("Pipeline executed successfully.")
+
+                st.subheader("📌 Summary of Your Startup")
+                st.write(results['founder_summary'])
+
+                st.subheader("🔎 Top Matching VC Firms")
+                for match in results['matches']:
+                    st.markdown(f"**{match['vc_name']}**")
+                    st.markdown(f"🔗 [Website]({match['vc_url']})")
+                    st.markdown(f"**Why it matches:** {match['match_reason']}")
+                    st.markdown("---")
+
+                st.subheader("🧠 Similar Companies in the VC Landscape")
+                for company in results.get("similar_companies", []):
+                    st.markdown(f"- **{company['name']}**: {company['description']}, funded by {company['vc']}")
+
+                st.subheader("📊 VC Clusters and Strategic Patterns")
+                st.pyplot(results['visuals'].get('clusters'))
+                st.markdown("Clusters are based on similarity in investment behavior. Hover for firm-level insight.")
+
+                st.subheader("🤝 VC Relationships & Competitive Dynamics")
+                st.pyplot(results['visuals'].get('relationships'))
+                st.markdown("Edges represent co-investments and competitive tensions.")
+
+                st.subheader("🌌 Gap / White Space Analysis")
+                st.markdown(results['gap'])
+
+                st.subheader("💬 Chat With Your Results")
+                user_query = st.text_input("Ask about the VC landscape, fit, or competition")
+                if user_query:
+                    chatbot_response = generate_chatbot_response(
+                        query=user_query,
+                        founder_summary=results['founder_summary'],
+                        vc_summaries=results['vc_summaries']
+                    )
+                    st.markdown(f"**AI Response:** {chatbot_response}")
+
             except Exception as e:
-                st.error(f"Something went wrong: {e}")
-                logger.exception("Error during orchestration")
-
-# Results Display
-results = st.session_state.get("results")
-if results:
-    st.subheader("✅ Summary at a Glance")
-
-    st.markdown("### 🔍 Top 3 VC Matches")
-    for match in results["matches"][:3]:
-        st.markdown(f"""**{match['vc_url']}**
-
-- Match Score: {match['score']}
-- Why a Match: _{match['why_match']}_
-- Messaging Advice: {match['messaging_advice']}
-""")
-
-    st.markdown("### 🎯 Closest Similar Startups")
-    for comp in results["similar_companies"]:
-        st.markdown(f"""**{comp['company_name']}** (Backed by {comp['vc_url']})
-
-- Similarity: {comp['similarity']}
-- What They Do: {comp['description']}
-- Strategic Insight: _{comp['strategic_insight']}_
-""")
-
-    st.markdown("### 🧠 VC Landscape Insights")
-    st.info(results["gap"])
-
-    st.subheader("📊 Cluster Map")
-    st.plotly_chart(results["visuals"]["tsne"])
-
-    st.subheader("🔥 Heatmap of Investment Themes")
-    st.pyplot(results["visuals"]["heatmap"])
-
-    st.subheader("📡 VC Relationship Graph")
-    rel_fig = results["relationships"]
-    st.pyplot(rel_fig)
-
-    st.subheader("💬 Ask VC Hunter Anything")
-    query = st.text_input("Ask a question about your matches or competitors:")
-    if query:
-        response = run_chat_agent(results["chat_context"], query)
-        st.success(response)
+                logger.error(f"Error during analysis: {e}", exc_info=True)
+                st.error(f"An error occurred: {e}")
