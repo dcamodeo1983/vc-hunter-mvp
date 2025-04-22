@@ -33,7 +33,6 @@ def load_documents_as_text(uploaded_files):
 
 def extract_text_from_file(file_bytes):
     try:
-        # Try plain UTF-8 text first
         return file_bytes.decode("utf-8")
     except UnicodeDecodeError:
         try:
