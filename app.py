@@ -3,8 +3,8 @@
 import streamlit as st
 import os
 import logging
-from llm_embed_gap_match_chat import generate_chatbot_response
-from agents.founder_doc_reader_and_orchestrator import run_full_pipeline  # ✅ Fixed import path
+from agents.llm_embed_gap_match_chat import generate_chatbot_response
+from agents.founder_doc_reader_and_orchestrator import run_full_pipeline
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -91,3 +91,4 @@ if uploaded_file is not None:
             except Exception as e:
                 logger.error(f"Error during analysis: {e}", exc_info=True)
                 st.error(f"An error occurred: {e}")
+
