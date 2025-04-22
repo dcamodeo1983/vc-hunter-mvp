@@ -6,9 +6,13 @@ from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def generate_tsne_plot(vc_embeddings, clusters, vc_summaries, cluster_descriptions):
-    urls = list(vc_embeddings.keys())
-    vectors = np.array([vc_embeddings[url] for url in urls])
+def generate_cluster_plot(vc_embeddings):
+    urls = [vc["url"] for vc in vc_embeddings]
+    vectors = np.array([vc["embedding"] for vc in vc_embeddings])
+    summaries = [vc.get("summary", "No summary") for vc in vc_embeddings]
+    clusters = [vc.get("cluster", 0) for vc in vc_embeddings]
+    themes = [vc.get("theme", "N/A") for vc in vc_embeddings]
+
     tsne = TSNE(n_components=2, random_state=42, perplexity=5)
     coords = tsne.fit_transform(vectors)
 
@@ -17,19 +21,18 @@ def generate_tsne_plot(vc_embeddings, clusters, vc_summaries, cluster_descriptio
         "x": coords[:, 0],
         "y": coords[:, 1],
         "cluster": clusters,
-        "summary": [vc_summaries[u] for u in urls],
-        "theme": [cluster_descriptions[c]["theme"] for c in clusters]
+        "summary": summaries,
+        "theme": themes
     })
 
     fig = go.Figure()
 
-    # Draw cluster hulls
     for label, group in df.groupby("cluster"):
         if len(group) >= 3:
             points = group[["x", "y"]].values
             hull = ConvexHull(points)
             hull_points = points[hull.vertices]
-            hull_points = np.append(hull_points, [hull_points[0]], axis=0)  # Close the loop
+            hull_points = np.append(hull_points, [hull_points[0]], axis=0)
             fig.add_trace(go.Scatter(
                 x=hull_points[:, 0],
                 y=hull_points[:, 1],
@@ -38,12 +41,11 @@ def generate_tsne_plot(vc_embeddings, clusters, vc_summaries, cluster_descriptio
                 line=dict(width=1),
                 name=f"Cluster {label}",
                 hoverinfo="text",
-                text=[f"Cluster {label}: {cluster_descriptions[label]['theme']}"] * len(hull_points),
+                text=[f"Cluster {label}: {themes[0]}"] * len(hull_points),
                 opacity=0.2,
                 showlegend=False
             ))
 
-    # Plot VCs
     fig.add_trace(go.Scatter(
         x=df["x"],
         y=df["y"],
@@ -65,6 +67,3 @@ def generate_heatmap_from_themes(theme_counts):
     ax.set_title("VC Investment Theme Intensity")
     plt.tight_layout()
     return fig
-
-# Ensure exported symbol exists
-generate_cluster_plot = generate_tsne_plot
