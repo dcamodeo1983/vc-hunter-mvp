@@ -3,7 +3,7 @@ import streamlit as st
 import os
 import logging
 from dotenv import load_dotenv
-from agents.founder_doc_reader_and_orchestrator import run_orchestration
+from agents.founder_doc_reader_and_orchestrator import run_orchestration, run_chat_agent
 
 # Load environment
 load_dotenv()
@@ -25,6 +25,15 @@ uploaded_files = st.file_uploader("Upload .pdf, .txt, or .docx", type=["pdf", "t
 if uploaded_files:
     st.session_state["founder_docs"] = uploaded_files
 
+# Load VC URLs
+vc_urls = []
+if os.path.exists("vc_urls.txt"):
+    with open("vc_urls.txt") as f:
+        vc_urls = [url.strip() for url in f.readlines()]
+else:
+    st.error("Missing vc_urls.txt. Please add VC URLs to analyze.")
+    st.stop()
+
 # Run section
 if st.button("🚀 Run VC Analysis"):
     if "founder_docs" not in st.session_state or not st.session_state["founder_docs"]:
@@ -32,7 +41,7 @@ if st.button("🚀 Run VC Analysis"):
     else:
         with st.spinner("Running full VC landscape analysis..."):
             try:
-                results = run_orchestration(st.session_state["founder_docs"])
+                results = run_orchestration(st.session_state["founder_docs"], vc_urls)
                 st.session_state["results"] = results
                 st.success("✅ Analysis complete!")
             except Exception as e:
@@ -46,23 +55,43 @@ if results:
 
     st.markdown("### 🔍 Top 3 VC Matches")
     for match in results["matches"][:3]:
-        st.markdown(f"- **{match['vc_url']}** – Match Score: {match['score']}")
+        st.markdown(
+            f"**{match['vc_url']}**  
+"
+            f"• Match Score: {match['score']}  
+"
+            f"• Why a Match: _{match['why_match']}_  
+"
+            f"• Messaging Advice: {match['messaging_advice']}"
+        )
 
     st.markdown("### 🎯 Closest Similar Startups")
     for comp in results["similar_companies"]:
-        st.markdown(f"- **{comp['company_name']}** (Backed by {comp['vc_url']}) – Similarity: {comp['similarity']}")
+        st.markdown(
+            f"**{comp['company_name']}** (Backed by {comp['vc_url']})  
+"
+            f"• Similarity: {comp['similarity']}  
+"
+            f"• What They Do: {comp['description']}  
+"
+            f"• Strategic Insight: _{comp['strategic_insight']}_"
+        )
 
     st.markdown("### 🧠 VC Landscape Insights")
     st.info(results["gap"])
 
     st.subheader("📊 Cluster Map")
-    if "cluster_plot" in results["visuals"]:
-        st.image("data:image/png;base64," + results["visuals"]["cluster_plot"])
+    st.plotly_chart(results["visuals"]["tsne"])
 
-    st.subheader("📡 VC Relationship View")
-    if "relationship_plot" in results["visuals"]:
-        st.image("data:image/png;base64," + results["visuals"]["relationship_plot"])
+    st.subheader("🔥 Heatmap of Investment Themes")
+    st.pyplot(results["visuals"]["heatmap"])
+
+    st.subheader("📡 VC Relationship Graph")
+    rel_fig = results["relationships"]
+    st.pyplot(rel_fig)
 
     st.subheader("💬 Ask VC Hunter Anything")
-    st.markdown("_Chat context loaded from founder + VC embeddings_")
-    st.text_area("Chat context (for future integration)", value=results["chat_context"], height=250)
+    query = st.text_input("Ask a question about your matches or competitors:")
+    if query:
+        response = run_chat_agent(results["chat_context"], query)
+        st.success(response)
