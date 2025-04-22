@@ -7,12 +7,17 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def generate_cluster_plot(vc_embeddings):
+    """
+    vc_embeddings: list of dicts with keys: url, embedding, summary, cluster, theme
+    Returns: Plotly TSNE cluster visualization figure
+    """
     urls = [vc["url"] for vc in vc_embeddings]
     vectors = np.array([vc["embedding"] for vc in vc_embeddings])
     summaries = [vc.get("summary", "No summary") for vc in vc_embeddings]
     clusters = [vc.get("cluster", 0) for vc in vc_embeddings]
     themes = [vc.get("theme", "N/A") for vc in vc_embeddings]
 
+    # Run t-SNE
     tsne = TSNE(n_components=2, random_state=42, perplexity=5)
     coords = tsne.fit_transform(vectors)
 
@@ -27,6 +32,7 @@ def generate_cluster_plot(vc_embeddings):
 
     fig = go.Figure()
 
+    # Cluster boundaries with convex hulls
     for label, group in df.groupby("cluster"):
         if len(group) >= 3:
             points = group[["x", "y"]].values
@@ -41,11 +47,12 @@ def generate_cluster_plot(vc_embeddings):
                 line=dict(width=1),
                 name=f"Cluster {label}",
                 hoverinfo="text",
-                text=[f"Cluster {label}: {themes[0]}"] * len(hull_points),
+                text=[f"Cluster {label}: {group['theme'].iloc[0]}"] * len(hull_points),
                 opacity=0.2,
                 showlegend=False
             ))
 
+    # Plot VCs
     fig.add_trace(go.Scatter(
         x=df["x"],
         y=df["y"],
@@ -60,8 +67,11 @@ def generate_cluster_plot(vc_embeddings):
     return fig
 
 def generate_heatmap_from_themes(theme_counts):
+    """
+    theme_counts: dict {theme_name: count}
+    Returns: Seaborn heatmap figure
+    """
     theme_df = pd.DataFrame.from_dict(theme_counts, orient="index", columns=["count"]).sort_values("count", ascending=False)
-
     fig, ax = plt.subplots(figsize=(10, 6))
     sns.heatmap(theme_df.T, cmap="YlGnBu", annot=True, fmt="d", cbar=False)
     ax.set_title("VC Investment Theme Intensity")
