@@ -39,8 +39,8 @@ def run_full_pipeline(founder_doc_bytes, vc_urls):
                 "embedding": embedding,
                 "portfolio": enriched,
                 "summary": summary,               # Ensure summary is present
-                "cluster": i,                      # Dummy cluster for now
-                "theme": f"Cluster {i}"            # Dummy theme for now
+                "cluster": i,                      # Dummy cluster ID
+                "theme": f"Cluster {i}"            # Dummy theme name
             })
 
         matches = match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries)
@@ -48,7 +48,7 @@ def run_full_pipeline(founder_doc_bytes, vc_urls):
         similar_companies = find_similar_companies(founder_embedding, vc_embeddings)
 
         cluster_plot = generate_cluster_plot(vc_embeddings)
-        relationship_plot = build_relationship_graph(vc_embeddings)
+        relationship_plot = build_relationship_graph(vc_embeddings, similar_companies)
 
         return {
             "founder_summary": founder_summary,
