@@ -58,9 +58,15 @@ def run_orchestration(founder_docs, vc_urls):
     results["gap"] = analyze_gap(founder_summary, vc_summaries)
 
     # Visuals: Cluster & Heatmap
-    clusters, cluster_plot = generate_tsne_plot(vc_data)
-    results["clusters"] = clusters
-    results["visuals"] = {"cluster_plot": cluster_plot}
+# Categorization and Clustering
+clusters, cluster_descriptions = categorize_vcs(vc_data)
+vc_summaries = [vc["summary"] for vc in vc_data]
+results["clusters"] = clusters
+
+# Visuals
+cluster_plot = generate_tsne_plot(clusters, vc_summaries, cluster_descriptions)
+results["visuals"] = {"cluster_plot": cluster_plot}
+
     heatmap = generate_heatmap_from_themes(vc_data)
     results["visuals"]["heatmap"] = heatmap
 
