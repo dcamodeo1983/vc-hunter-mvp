@@ -35,3 +35,11 @@ def encode_file_to_base64(file_path):
 
 def safe_truncate_text(text, max_tokens, encoding_name="cl100k_base"):
     try:
+        import tiktoken
+        enc = tiktoken.get_encoding(encoding_name)
+        tokens = enc.encode(text)
+        return enc.decode(tokens[:max_tokens])
+    except Exception as e:
+        logger.warning(f"Failed to truncate text safely: {e}")
+        return text[:4000]  # Safe fallback
+
