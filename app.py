@@ -55,27 +55,21 @@ if results:
 
     st.markdown("### 🔍 Top 3 VC Matches")
     for match in results["matches"][:3]:
-        st.markdown(
-            f"**{match['vc_url']}**  
-"
-            f"- Match Score: {match['score']}  
-"
-            f"- Why a Match: _{match['why_match']}_  
-"
-            f"- Messaging Advice: {match['messaging_advice']}"
-        )
+        st.markdown(f"""**{match['vc_url']}**
+
+- Match Score: {match['score']}
+- Why a Match: _{match['why_match']}_
+- Messaging Advice: {match['messaging_advice']}
+""")
 
     st.markdown("### 🎯 Closest Similar Startups")
     for comp in results["similar_companies"]:
-        st.markdown(
-            f"**{comp['company_name']}** (Backed by {comp['vc_url']})  
-"
-            f"- Similarity: {comp['similarity']}  
-"
-            f"- What They Do: {comp['description']}  
-"
-            f"- Strategic Insight: _{comp['strategic_insight']}_"
-        )
+        st.markdown(f"""**{comp['company_name']}** (Backed by {comp['vc_url']})
+
+- Similarity: {comp['similarity']}
+- What They Do: {comp['description']}
+- Strategic Insight: _{comp['strategic_insight']}_
+""")
 
     st.markdown("### 🧠 VC Landscape Insights")
     st.info(results["gap"])
