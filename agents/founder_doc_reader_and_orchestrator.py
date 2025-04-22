@@ -9,17 +9,21 @@ from agents.llm_embed_gap_match_chat import (
     match_founder_to_vcs,
     analyze_gap
 )
-from agents.utils import extract_text_from_file, convert_pdf_to_text
+from agents.utils import safe_truncate_text  # corrected: no extract_text_from_file or convert_pdf_to_text
 from agents.relationship_agent import build_relationship_graph
-from agents.visualization_agent import generate_cluster_plot
+from agents.visualization_agent import generate_tsne_plot  # corrected import name
 from agents.similar_company_agent import find_similar_companies
 
 logger = logging.getLogger(__name__)
 
 def run_full_pipeline(founder_doc_bytes, vc_urls):
     try:
-        # Convert and extract text
-        text = extract_text_from_file(founder_doc_bytes)
+        # Decode bytes assuming UTF-8 plain text or fallback
+        try:
+            text = founder_doc_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text = founder_doc_bytes.decode("latin1")
+
         founder_summary, founder_embedding = generate_founder_summary(text)
 
         vc_summaries = []
@@ -36,7 +40,12 @@ def run_full_pipeline(founder_doc_bytes, vc_urls):
         gap_insights = analyze_gap(founder_summary, [vc['summary'] for vc in vc_summaries])
         similar_companies = find_similar_companies(founder_embedding, vc_embeddings)
 
-        cluster_plot = generate_cluster_plot(vc_embeddings)
+        cluster_plot = generate_tsne_plot(
+            {vc['url']: vc['embedding'] for vc in vc_embeddings},
+            [i for i in range(len(vc_embeddings))],  # dummy clusters for now
+            {vc['url']: vc['summary'] for vc in vc_summaries},
+            {i: {"theme": f"Cluster {i}"} for i in range(len(vc_embeddings))}  # dummy cluster themes
+        )
         relationship_plot = build_relationship_graph(vc_embeddings)
 
         return {
