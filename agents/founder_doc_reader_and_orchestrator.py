@@ -28,6 +28,8 @@ def run_orchestration(founder_docs, vc_urls):
 
     # Scrape and enrich VC websites
     vc_data = []
+    vc_summaries = []
+
     for url in vc_urls:
         try:
             scraped_text = scrape_vc_website(url)
@@ -39,20 +41,21 @@ def run_orchestration(founder_docs, vc_urls):
                 "embedding": embedding,
                 "portfolio": enriched_portfolio
             })
+            vc_summaries.append(summary)
         except Exception as e:
             logger.warning(f"Skipping malformed VC entry: {url} due to {e}")
 
     if not vc_data:
         raise ValueError("No usable VC data was retrieved.")
 
-    results["vc_summaries"] = [vc["summary"] for vc in vc_data]
+    results["vc_summaries"] = vc_summaries
 
     # Match founder to VCs
     matches = match_founder_to_vcs(founder_embedding, vc_data, vc_summaries)
     results["matches"] = matches
 
     # Analyze gap
-    results["gap"] = analyze_gap(founder_summary, [vc["summary"] for vc in vc_data])
+    results["gap"] = analyze_gap(founder_summary, vc_summaries)
 
     # Visuals: Cluster & Heatmap
     clusters, cluster_plot = generate_tsne_plot(vc_data)
@@ -76,13 +79,10 @@ def run_orchestration(founder_docs, vc_urls):
     results["visuals"]["relationship_plot"] = relationship_plot
 
     # Chat context
-    context = generate_chat_context(founder_summary, [vc["summary"] for vc in vc_data])
+    context = generate_chat_context(founder_summary, vc_summaries)
     results["chat_context"] = context
 
     return results
 
-from agents.chat_agent import answer_question
-
 def run_chat_agent(question, founder_summary, vc_summaries):
     return answer_question(question, founder_summary, vc_summaries)
-
