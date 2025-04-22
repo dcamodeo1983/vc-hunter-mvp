@@ -7,7 +7,7 @@ from llm_embed_gap_match_chat import (
     load_or_generate_embeddings,
     generate_chatbot_response,
 )
-from founder_doc_reader_and_orchestrator import run_full_pipeline
+from agents.founder_doc_reader_and_orchestrator import run_full_pipeline  # ✅ Corrected path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
