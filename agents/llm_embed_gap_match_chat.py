@@ -2,6 +2,9 @@
 import os
 from openai import OpenAI
 from agents.utils import safe_truncate_text
+import logging
+
+logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -38,14 +41,17 @@ def generate_embedding(text):
 def match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries):
     matches = []
     for vc in vc_embeddings:
-        score = cosine_similarity(founder_embedding, vc['embedding'])
-        vc_summary = next((s['summary'] for s in vc_summaries if s['url'] == vc['url']), "No summary available.")
-        matches.append({
-            "vc_url": vc["url"],
-            "score": round(score, 4),
-            "why_match": vc_summary,
-            "messaging_advice": f"Emphasize alignment with {vc_summary.split('.')[0]}."
-        })
+        if isinstance(vc, dict) and "embedding" in vc and "url" in vc:
+            score = cosine_similarity(founder_embedding, vc["embedding"])
+            vc_summary = next((s['summary'] for s in vc_summaries if s['url'] == vc['url']), "No summary available.")
+            matches.append({
+                "vc_url": vc["url"],
+                "score": round(score, 4),
+                "why_match": vc_summary,
+                "messaging_advice": f"Emphasize alignment with {vc_summary.split('.')[0]}."
+            })
+        else:
+            logger.warning(f"Skipping malformed VC entry: {vc}")
     return sorted(matches, key=lambda x: x["score"], reverse=True)
 
 def cosine_similarity(vec1, vec2):
