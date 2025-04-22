@@ -3,6 +3,7 @@
 import streamlit as st
 import os
 import logging
+from urllib.parse import urlparse
 from agents.llm_embed_gap_match_chat import generate_chatbot_response
 from agents.founder_doc_reader_and_orchestrator import run_full_pipeline
 
@@ -54,9 +55,10 @@ if uploaded_file is not None:
 
                 st.subheader("🔎 Top Matching VC Firms")
                 for match in results['matches']:
-                    st.markdown(f"**{match['vc_name']}**")
+                    domain = urlparse(match['vc_url']).netloc
+                    st.markdown(f"**{domain}**")
                     st.markdown(f"🔗 [Website]({match['vc_url']})")
-                    st.markdown(f"**Why it matches:** {match['match_reason']}")
+                    st.markdown(f"**Why it matches:** {match['why_match']}")
                     st.markdown("---")
 
                 st.subheader("🧠 Similar Companies in the VC Landscape")
@@ -91,4 +93,3 @@ if uploaded_file is not None:
             except Exception as e:
                 logger.error(f"Error during analysis: {e}", exc_info=True)
                 st.error(f"An error occurred: {e}")
-
