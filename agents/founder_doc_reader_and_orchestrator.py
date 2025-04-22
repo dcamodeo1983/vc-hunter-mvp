@@ -1,78 +1,79 @@
 
 import os
-import json
-import logging
-from agents.utils import (
-    load_or_generate_embedding,
-    save_results_to_cache,
-    load_results_from_cache,
-    get_vc_urls_from_file
+from agents.website_scraper_agent import scrape_vc_website
+from agents.portfolio_enricher_agent import enrich_portfolio_data
+from agents.llm_embed_gap_match_chat import (
+    generate_founder_summary,
+    generate_vc_summary,
+    match_founder_to_vcs,
+    analyze_gap,
+    generate_chat_context
 )
-from agents.website_scraper_agent import scrape_website_text
-from agents.portfolio_enricher_agent import enrich_portfolio
-from agents.llm_embed_gap_match_chat import generate_founder_summary, generate_vc_summary, match_founder_to_vcs, analyze_gap, generate_chat_context
-from agents.categorizer_agent import categorize_vcs
-from agents.relationship_agent import compute_vc_relationships
 from agents.similar_company_agent import find_similar_portfolio_companies
-from agents.visualization_agent import generate_visuals
+from agents.categorizer_agent import categorize_vcs
+from agents.relationship_agent import build_relationship_graph
+from agents.visualization_agent import generate_tsne_plot, generate_heatmap_from_themes
+from agents.chat_agent import answer_question
 
-logger = logging.getLogger(__name__)
-
-def run_orchestration(founder_docs, vc_url_file="vc_urls.txt"):
+def run_orchestration(founder_docs, vc_urls):
     results = {}
-    
-    # 1. Process founder documents
+
+    # Founder embedding
     founder_summary, founder_embedding = generate_founder_summary(founder_docs)
     results["founder_summary"] = founder_summary
 
-    # 2. Load VC URLs
-    vc_urls = get_vc_urls_from_file(vc_url_file)
-
-    vc_summaries = {}
     vc_embeddings = {}
-    enriched_data = {}
+    vc_summaries = {}
+    portfolio_embeddings = {}
 
     for url in vc_urls:
-        try:
-            # 3. Scrape and summarize
-            raw_text = scrape_website_text(url)
-            portfolio_info = enrich_portfolio(url)
-            summary, embedding = generate_vc_summary(url, raw_text, portfolio_info)
-            vc_summaries[url] = summary
-            vc_embeddings[url] = embedding
-            enriched_data[url] = portfolio_info
-        except Exception as e:
-            logger.warning(f"Skipping {url} due to error: {e}")
-            continue
+        text, portfolio = scrape_vc_website(url)
+        enriched_portfolio = enrich_portfolio_data(portfolio)
+        summary, embedding = generate_vc_summary(url, text, enriched_portfolio)
+        vc_embeddings[url] = embedding
+        vc_summaries[url] = summary
+        portfolio_embeddings[url] = enriched_portfolio
 
     results["vc_summaries"] = vc_summaries
 
-    # 4. Categorize VCs
-    clusters = categorize_vcs(vc_embeddings)
-    results["clusters"] = clusters
-
-    # 5. Compute VC relationships
-    relationships = compute_vc_relationships(enriched_data)
-    results["relationships"] = relationships
-
-    # 6. Match Founder to VCs
-    matches = match_founder_to_vcs(founder_embedding, vc_embeddings)
+    # Matching
+    matches = match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries)
     results["matches"] = matches
 
-    # 7. Gap Analysis
-    gap = analyze_gap(vc_embeddings, founder_embedding, clusters)
-    results["gap"] = gap
-
-    # 8. Similar Companies
-    similar_companies = find_similar_portfolio_companies(founder_embedding, enriched_data)
-    results["similar_companies"] = similar_companies
-
-    # 9. Visualizations
-    visuals = generate_visuals(vc_embeddings, clusters, relationships)
-    results["visuals"] = visuals
-
-    # 10. Chatbot Context
-    chat_context = generate_chat_context(founder_summary, vc_summaries)
+    # Chat context
+    chat_context = generate_chat_context(founder_summary, vc_summaries, matches)
     results["chat_context"] = chat_context
 
+    # Similar companies
+    similar = find_similar_portfolio_companies(founder_embedding, portfolio_embeddings)
+    results["similar_companies"] = similar
+
+    # Clustering
+    clusters, cluster_meta = categorize_vcs(vc_embeddings, vc_summaries)
+    results["clusters"] = clusters
+
+    # Visuals
+    results["visuals"] = {
+        "tsne": generate_tsne_plot(vc_embeddings, clusters, vc_summaries, cluster_meta),
+        "heatmap": generate_heatmap_from_themes(
+            {meta["theme"]: len(meta["vc_urls"]) for meta in cluster_meta.values()}
+        )
+    }
+
+    # Relationships
+    co_investments = []
+    competitors = []
+    for sim in similar:
+        co_investments.append((sim["vc_url"], matches[0]["vc_url"], sim["similarity"]))
+        competitors.append((matches[0]["vc_url"], sim["vc_url"], 1.0 - sim["similarity"]))
+
+    G = build_relationship_graph(co_investments, competitors)
+    results["relationships"] = G
+
+    # Gap analysis
+    results["gap"] = analyze_gap(vc_embeddings, founder_embedding, cluster_meta)
+
     return results
+
+def run_chat_agent(context, query):
+    return answer_question(query, context)
