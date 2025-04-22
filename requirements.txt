@@ -8,4 +8,5 @@ tiktoken
 beautifulsoup4
 requests
 python-dotenv
+networkx==3.3
 # Models configurable with VC_HUNTER_CHAT_MODEL and VC_HUNTER_EMBED_MODEL
