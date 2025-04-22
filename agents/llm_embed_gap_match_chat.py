@@ -35,15 +35,16 @@ def generate_embedding(text):
     )
     return response.data[0].embedding
 
-def match_founder_to_vcs(founder_embedding, vc_data):
+def match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries):
     matches = []
-    for vc in vc_data:
+    for vc in vc_embeddings:
         score = cosine_similarity(founder_embedding, vc['embedding'])
+        vc_summary = next((s['summary'] for s in vc_summaries if s['url'] == vc['url']), "No summary available.")
         matches.append({
             "vc_url": vc["url"],
             "score": round(score, 4),
-            "why_match": vc.get("summary", "N/A"),
-            "messaging_advice": f"Emphasize {vc.get('summary', '').split('.')[0]}."
+            "why_match": vc_summary,
+            "messaging_advice": f"Emphasize alignment with {vc_summary.split('.')[0]}."
         })
     return sorted(matches, key=lambda x: x["score"], reverse=True)
 
