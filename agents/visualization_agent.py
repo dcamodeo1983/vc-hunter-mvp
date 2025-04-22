@@ -48,4 +48,7 @@ def generate_tsne_plot(vc_embeddings, clusters, vc_summaries, cluster_descriptio
         x=df["x"],
         y=df["y"],
         mode="markers",
-        marker=dict(size=8, color=df["cluster"], colorscale="Vir
+        marker=dict(size=8, color=df["cluster"], colorscale="Viridis", showscale=True),
+        text=df["vc_url"] + "<br><br><b>Theme:</b> " + df["theme"] + "<br><br><b>Summary:</b><br>" + df["summary"],
+        hoverinfo="text",
+        name
