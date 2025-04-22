@@ -1,48 +1,68 @@
 
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import numpy as np
-import io
-import base64
+import pandas as pd
+from sklearn.manifold import TSNE
+from scipy.spatial import ConvexHull
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-def generate_visuals(vc_embeddings, clusters, relationships):
-    images = {}
+def generate_tsne_plot(vc_embeddings, clusters, vc_summaries, cluster_descriptions):
+    urls = list(vc_embeddings.keys())
+    vectors = np.array([vc_embeddings[url] for url in urls])
+    tsne = TSNE(n_components=2, random_state=42, perplexity=5)
+    coords = tsne.fit_transform(vectors)
 
-    # 1. Plot VC embeddings colored by cluster
-    try:
-        urls = list(vc_embeddings.keys())
-        vecs = np.array([vc_embeddings[u] for u in urls])
-        labels = [clusters[u]["cluster"] for u in urls]
+    df = pd.DataFrame({
+        "vc_url": urls,
+        "x": coords[:, 0],
+        "y": coords[:, 1],
+        "cluster": clusters,
+        "summary": [vc_summaries[u] for u in urls],
+        "theme": [cluster_descriptions[c]["theme"] for c in clusters]
+    })
 
-        plt.figure(figsize=(8, 6))
-        scatter = plt.scatter(vecs[:, 0], vecs[:, 1], c=labels, cmap='viridis')
-        plt.title("VC Embeddings by Cluster")
-        plt.xlabel("Dimension 1")
-        plt.ylabel("Dimension 2")
+    fig = go.Figure()
 
-        for i, txt in enumerate(urls):
-            plt.annotate(f"VC{i+1}", (vecs[i, 0], vecs[i, 1]), fontsize=6)
+    # Draw cluster hulls
+    for label, group in df.groupby("cluster"):
+        if len(group) >= 3:
+            points = group[["x", "y"]].values
+            hull = ConvexHull(points)
+            hull_points = points[hull.vertices]
+            hull_points = np.append(hull_points, [hull_points[0]], axis=0)  # Close the loop
+            fig.add_trace(go.Scatter(
+                x=hull_points[:, 0],
+                y=hull_points[:, 1],
+                fill="toself",
+                mode="lines",
+                line=dict(width=1),
+                name=f"Cluster {label}",
+                hoverinfo="text",
+                text=[f"Cluster {label}: {cluster_descriptions[label]['theme']}"] * len(hull_points),
+                opacity=0.2,
+                showlegend=False
+            ))
 
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        buf.seek(0)
-        images["cluster_plot"] = base64.b64encode(buf.read()).decode("utf-8")
-        plt.close()
-    except Exception as e:
-        images["cluster_plot"] = f"Error generating cluster plot: {e}"
+    # Plot VCs
+    fig.add_trace(go.Scatter(
+        x=df["x"],
+        y=df["y"],
+        mode="markers",
+        marker=dict(size=8, color=df["cluster"], colorscale="Viridis", showscale=True),
+        text=df["vc_url"] + "<br><br><b>Theme:</b> " + df["theme"] + "<br><br><b>Summary:</b><br>" + df["summary"],
+        hoverinfo="text",
+        name="VC Firms"
+    ))
 
-    # 2. Relationship heatmap placeholder
-    try:
-        plt.figure(figsize=(6, 4))
-        plt.title("VC Relationships (placeholder)")
-        plt.text(0.5, 0.5, "Relationship matrix visualization", ha='center', va='center')
-        plt.axis("off")
+    fig.update_layout(title="VC Landscape Cluster Visualization", height=600)
+    return fig
 
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png")
-        buf.seek(0)
-        images["relationship_plot"] = base64.b64encode(buf.read()).decode("utf-8")
-        plt.close()
-    except Exception as e:
-        images["relationship_plot"] = f"Error generating relationship plot: {e}"
+def generate_heatmap_from_themes(theme_counts):
+    theme_df = pd.DataFrame.from_dict(theme_counts, orient="index", columns=["count"]).sort_values("count", ascending=False)
 
-    return images
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.heatmap(theme_df.T, cmap="YlGnBu", annot=True, fmt="d", cbar=False)
+    ax.set_title("VC Investment Theme Intensity")
+    plt.tight_layout()
+    return fig
