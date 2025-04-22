@@ -31,6 +31,27 @@ def load_documents_as_text(uploaded_files):
             logger.warning(f"Failed to load file {filename}: {e}")
     return texts
 
+def extract_text_from_file(file_bytes):
+    try:
+        # Try plain UTF-8 text first
+        return file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            return convert_pdf_to_text(file_bytes)
+        except Exception as e:
+            logger.warning(f"Failed to extract text from PDF: {e}")
+            raise ValueError("Unable to parse input as plain text or PDF.")
+
+def convert_pdf_to_text(file_bytes):
+    try:
+        with open("/tmp/temp_stream.pdf", "wb") as f:
+            f.write(file_bytes)
+        reader = PdfReader("/tmp/temp_stream.pdf")
+        return "\n".join(page.extract_text() for page in reader.pages if page.extract_text())
+    except Exception as e:
+        logger.error("PDF parsing failed", exc_info=True)
+        raise
+
 def safe_truncate_text(text, max_tokens, encoding_name="cl100k_base"):
     try:
         import tiktoken
