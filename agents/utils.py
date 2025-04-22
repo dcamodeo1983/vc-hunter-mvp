@@ -1,55 +1,84 @@
+# agents/utils.py
 
 import os
-import json
+import base64
 import logging
-import tiktoken
-import numpy as np
+import docx2txt
+from PyPDF2 import PdfReader
 
 logger = logging.getLogger(__name__)
 
-def load_or_generate_embedding(text, embed_fn, cache_path):
-    if os.path.exists(cache_path):
+def load_documents_as_text(documents):
+    """Loads a list of uploaded documents and extracts their text content."""
+    texts = []
+
+    for doc in documents:
         try:
-            with open(cache_path, "r") as f:
-                return json.load(f)
+            file_type = doc.name.split(".")[-1].lower()
+            logger.info(f"Processing file: {doc.name} of type {file_type}")
+
+            if file_type == "pdf":
+                reader = PdfReader(doc)
+                text = "\n".join([page.extract_text() or "" for page in reader.pages])
+            elif file_type == "txt":
+                text = doc.read().decode("utf-8")
+            elif file_type == "docx":
+                with open(f"/tmp/{doc.name}", "wb") as f:
+                    f.write(doc.read())
+                text = docx2txt.process(f"/tmp/{doc.name}")
+            else:
+                logger.warning(f"Unsupported file type: {file_type}")
+                raise ValueError(f"Unsupported file type: {file_type}")
+
+            texts.append(text.strip())
         except Exception as e:
-            logger.warning(f"Failed to load cached embedding: {e}")
+            logger.exception(f"Failed to process document: {doc.name}")
+            raise e
 
-    embedding = embed_fn(text)
-    with open(cache_path, "w") as f:
-        json.dump(embedding, f)
-    return embedding
+    return texts
 
-def save_results_to_cache(results, filename="results_cache.json"):
-    with open(filename, "w") as f:
-        json.dump(results, f)
 
-def load_results_from_cache(filename="results_cache.json"):
-    if os.path.exists(filename):
-        with open(filename, "r") as f:
-            return json.load(f)
-    return None
+def encode_plot_to_base64(fig):
+    """Encodes a Matplotlib figure to a base64 string for Streamlit rendering."""
+    import io
+    import matplotlib.pyplot as plt
 
-def get_vc_urls_from_file(path):
-    if not os.path.exists(path):
-        raise FileNotFoundError("vc_urls.txt not found.")
-    with open(path, "r") as f:
-        return [line.strip() for line in f if line.strip()]
+    try:
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        img_bytes = buf.read()
+        encoded = base64.b64encode(img_bytes).decode()
+        plt.close(fig)
+        logger.info("Encoded plot to base64 successfully.")
+        return encoded
+    except Exception as e:
+        logger.exception("Failed to encode plot.")
+        return None
 
-def count_tokens(text, model="gpt-4"):
-    enc = tiktoken.encoding_for_model(model)
-    return len(enc.encode(text))
 
-def safe_truncate_text(text, model="gpt-4", max_tokens=8000):
-    enc = tiktoken.encoding_for_model(model)
-    tokens = enc.encode(text)
-    if len(tokens) > max_tokens:
-        tokens = tokens[:max_tokens]
-    return enc.decode(tokens)
+def encode_networkx_to_base64(G):
+    """Generates a network plot from a NetworkX graph and returns it as base64."""
+    import io
+    import matplotlib.pyplot as plt
+    import networkx as nx
 
-def ensure_numpy_array(data):
-    if isinstance(data, list):
-        return np.array(data).reshape(1, -1)
-    if isinstance(data, np.ndarray):
-        return data.reshape(1, -1)
-    raise ValueError("Input must be list or numpy array")
+    try:
+        fig, ax = plt.subplots(figsize=(10, 8))
+        pos = nx.spring_layout(G, seed=42)
+        nx.draw_networkx_nodes(G, pos, node_color='skyblue', node_size=500, ax=ax)
+        nx.draw_networkx_edges(G, pos, edge_color='gray', alpha=0.5, ax=ax)
+        nx.draw_networkx_labels(G, pos, font_size=10, ax=ax)
+        plt.axis('off')
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        img_bytes = buf.read()
+        encoded = base64.b64encode(img_bytes).decode()
+        plt.close(fig)
+        logger.info("Encoded network graph to base64 successfully.")
+        return encoded
+    except Exception as e:
+        logger.exception("Failed to encode NetworkX graph.")
+        return None
