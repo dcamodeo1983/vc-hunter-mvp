@@ -76,4 +76,7 @@ def run_orchestration(founder_docs, vc_urls):
     results["visuals"]["relationship_plot"] = relationship_plot
 
     # Chat context
-    context = generate_chat_context(founder_summary, [vc_
+    context = generate_chat_context(founder_summary, [vc["summary"] for vc in vc_data])
+    results["chat_context"] = context
+
+    return results
