@@ -1,38 +1,41 @@
 import os
-import time
 import logging
+import time
 from openai import OpenAI
 from agents.utils import safe_truncate_text
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# Use GPT-3.5 for cost-effective summarization & chat
-CHAT_MODEL = os.getenv("VC_HUNTER_CHAT_MODEL", "gpt-3.5-turbo")
+CHAT_MODEL = os.getenv("VC_HUNTER_CHAT_MODEL", "gpt-4")
 EMBED_MODEL = os.getenv("VC_HUNTER_EMBED_MODEL", "text-embedding-ada-002")
-GPT4_MODEL = os.getenv("VC_HUNTER_GPT4_MODEL", "gpt-4")  # for gap analysis
+
+MAX_INPUT_TOKENS = 8000  # conservative for 16k model
 
 def generate_founder_summary(text):
+    safe_text = safe_truncate_text(text, max_tokens=MAX_INPUT_TOKENS)
+    logger.info(f"[Founder Summary] Truncated token count: ~{len(safe_text) // 4} tokens")
+
     response = client.chat.completions.create(
         model=CHAT_MODEL,
-        messages=[{"role": "user", "content": f"Summarize this founder document: {text}"}]
+        messages=[{"role": "user", "content": f"Summarize this founder document:\n\n{safe_text}"}]
     )
     summary = response.choices[0].message.content.strip()
-    time.sleep(2)
+    time.sleep(1)
     embed = generate_embedding(summary)
     return summary, embed
 
 def generate_vc_summary(vc_url, scraped_text, portfolio_info):
     formatted_portfolio = ", ".join([f"{item['name']}: {item['description']}" for item in portfolio_info])
     combined = f"Website: {vc_url}\n\nDescription:\n{scraped_text}\n\nPortfolio:\n{formatted_portfolio}"
+    safe_combined = safe_truncate_text(combined, max_tokens=MAX_INPUT_TOKENS)
+    logger.info(f"[VC Summary] Truncated token count: ~{len(safe_combined) // 4} tokens")
+
     response = client.chat.completions.create(
         model=CHAT_MODEL,
-        messages=[{"role": "user", "content": f"Summarize this VC firm: {combined}"}]
+        messages=[{"role": "user", "content": f"Summarize this VC firm:\n\n{safe_combined}"}]
     )
     summary = response.choices[0].message.content.strip()
-    time.sleep(2)
     embed = generate_embedding(summary)
     return summary, embed
 
@@ -41,13 +44,12 @@ def generate_embedding(text):
         input=[safe_truncate_text(text, max_tokens=7500)],
         model=EMBED_MODEL
     )
-    time.sleep(2)
     return response.data[0].embedding
 
 def cosine_similarity(vec1, vec2):
-    vec1 = np.array(vec1)
-    vec2 = np.array(vec2)
-    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+    from numpy import dot
+    from numpy.linalg import norm
+    return dot(vec1, vec2) / (norm(vec1) * norm(vec2))
 
 def match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries):
     matches = []
@@ -66,24 +68,29 @@ def match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries):
     return sorted(matches, key=lambda x: x["score"], reverse=True)
 
 def analyze_gap(founder_summary, vc_summaries):
-    prompt = (
-        "Given the following founder's summary and the summaries of various VCs, "
-        "analyze the whitespace or mismatch in themes or focus areas. Highlight any unmet needs or gaps.\n\n"
-        f"Founder Summary:\n{founder_summary}\n\n"
-        f"VC Summaries:\n" + "\n\n".join(vc_summaries)
-    )
+    joined_vcs = "\n\n".join(vc_summaries)
+    combined = f"Founder Summary:\n{founder_summary}\n\nVC Summaries:\n{joined_vcs}"
+    safe_combined = safe_truncate_text(combined, max_tokens=MAX_INPUT_TOKENS)
+    logger.info(f"[Gap Analysis] Combined prompt truncated to ~{len(safe_combined) // 4} tokens")
+
     response = client.chat.completions.create(
-        model=GPT4_MODEL,
-        messages=[{"role": "user", "content": prompt}]
+        model=CHAT_MODEL,
+        messages=[{"role": "user", "content": 
+                   "Given the following founder's summary and the summaries of various VCs, "
+                   "analyze the whitespace or mismatch in themes or focus areas. Highlight any unmet needs or gaps.\n\n"
+                   + safe_combined}]
     )
     return response.choices[0].message.content.strip()
 
 def generate_chatbot_response(query, founder_summary, vc_summaries):
     context = generate_chat_context(founder_summary, vc_summaries, [])
     prompt = f"{context}\n\nUser question: {query}"
+    safe_prompt = safe_truncate_text(prompt, max_tokens=MAX_INPUT_TOKENS)
+    logger.info(f"[Chatbot] Prompt length after truncation: ~{len(safe_prompt) // 4} tokens")
+
     response = client.chat.completions.create(
         model=CHAT_MODEL,
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": safe_prompt}]
     )
     return response.choices[0].message.content.strip()
 
@@ -105,7 +112,6 @@ def load_or_generate_embeddings(entities, embedding_type, generate_func):
                 "embedding": embedding,
                 "url": entity.get("url") if isinstance(entity, dict) else "unknown"
             })
-            time.sleep(2)
         except Exception as e:
             logger.warning(f"Failed to generate {embedding_type} embedding for: {entity} | Error: {e}")
     return results
