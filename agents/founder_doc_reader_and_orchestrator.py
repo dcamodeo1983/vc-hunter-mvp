@@ -80,3 +80,9 @@ def run_orchestration(founder_docs, vc_urls):
     results["chat_context"] = context
 
     return results
+
+from agents.chat_agent import answer_question
+
+def run_chat_agent(question, founder_summary, vc_summaries):
+    return answer_question(question, founder_summary, vc_summaries)
+
