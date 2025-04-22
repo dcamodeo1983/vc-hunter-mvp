@@ -51,4 +51,20 @@ def generate_tsne_plot(vc_embeddings, clusters, vc_summaries, cluster_descriptio
         marker=dict(size=8, color=df["cluster"], colorscale="Viridis", showscale=True),
         text=df["vc_url"] + "<br><br><b>Theme:</b> " + df["theme"] + "<br><br><b>Summary:</b><br>" + df["summary"],
         hoverinfo="text",
-        name
+        name="VC Firms"
+    ))
+
+    fig.update_layout(title="VC Landscape Cluster Visualization", height=600)
+    return fig
+
+def generate_heatmap_from_themes(theme_counts):
+    theme_df = pd.DataFrame.from_dict(theme_counts, orient="index", columns=["count"]).sort_values("count", ascending=False)
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.heatmap(theme_df.T, cmap="YlGnBu", annot=True, fmt="d", cbar=False)
+    ax.set_title("VC Investment Theme Intensity")
+    plt.tight_layout()
+    return fig
+
+# Ensure exported symbol exists
+generate_cluster_plot = generate_tsne_plot
