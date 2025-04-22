@@ -67,15 +67,19 @@ if uploaded_file is not None:
                     st.markdown(f"- **{company['name']}**: {company['description']}, funded by {company['vc']}")
 
                 st.subheader("📊 VC Clusters and Strategic Patterns")
-                st.pyplot(results['visuals'].get('clusters'))
-                st.markdown("Clusters are based on similarity in investment behavior. Hover for firm-level insight.")
+                if results['visuals'].get('clusters'):
+                    st.pyplot(results['visuals']['clusters'])
+                else:
+                    st.warning("No cluster visualization available.")
 
                 st.subheader("🤝 VC Relationships & Competitive Dynamics")
-                st.pyplot(results['visuals'].get('relationships'))
-                st.markdown("Edges represent co-investments and competitive tensions.")
+                if results['visuals'].get('relationships'):
+                    st.pyplot(results['visuals']['relationships'])
+                else:
+                    st.warning("No relationship visualization available.")
 
                 st.subheader("🌌 Gap / White Space Analysis")
-                st.markdown(results['gap'])
+                st.markdown(results.get('gap', 'No gap analysis available.'))
 
                 st.subheader("💬 Chat With Your Results")
                 user_query = st.text_input("Ask about the VC landscape, fit, or competition")
