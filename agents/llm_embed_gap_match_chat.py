@@ -1,93 +1,64 @@
 
-from openai import OpenAI
-import numpy as np
 import os
-from agents.utils import ensure_numpy_array, safe_truncate_text
+from openai import OpenAI
+from agents.utils import safe_truncate_text
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 CHAT_MODEL = os.getenv("VC_HUNTER_CHAT_MODEL", "gpt-4")
 EMBED_MODEL = os.getenv("VC_HUNTER_EMBED_MODEL", "text-embedding-ada-002")
 
-def summarize_text(text, prompt_prefix="Summarize the following VC firm or startup concept:"):
-    prompt = f"{prompt_prefix}\n\n{text}\n\nSummary:"
+def generate_founder_summary(text):
     response = client.chat.completions.create(
         model=CHAT_MODEL,
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": f"Summarize this founder document: {text}"}]
     )
-    return response.choices[0].message.content.strip()
+    summary = response.choices[0].message.content.strip()
+    embed = generate_embedding(summary)
+    return summary, embed
 
-def embed_text(text):
+def generate_vc_summary(vc_url, scraped_text, portfolio_info):
+    formatted_portfolio = ", ".join([f"{item['name']}: {item['description']}" for item in portfolio_info])
+    combined = f"Website: {vc_url}\n\nDescription:\n{scraped_text}\n\nPortfolio:\n{formatted_portfolio}"
+    response = client.chat.completions.create(
+        model=CHAT_MODEL,
+        messages=[{"role": "user", "content": f"Summarize this VC firm: {combined}"}]
+    )
+    summary = response.choices[0].message.content.strip()
+    embed = generate_embedding(summary)
+    return summary, embed
+
+def generate_embedding(text):
     response = client.embeddings.create(
-        input=[text],
+        input=[safe_truncate_text(text)],
         model=EMBED_MODEL
     )
     return response.data[0].embedding
 
-def generate_founder_summary(files):
-    contents = []
-    for file in files:
-        contents.append(file.read().decode("utf-8", errors="ignore"))
-    combined = "\n".join(contents)
-    truncated = safe_truncate_text(combined)
-    summary = summarize_text(truncated)
-    embedding = embed_text(summary)
-    return summary, embedding
-
-def generate_vc_summary(vc_url, scraped_text, portfolio_info):
-    combined = f"Website: {vc_url}\n\nDescription:\n{scraped_text}\n\nPortfolio:\n" + ", ".join(portfolio_info)
-    truncated = safe_truncate_text(combined)
-    summary = summarize_text(truncated)
-    embedding = embed_text(summary)
-    return summary, embedding
-
-def match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries):
-    results = []
-    for url, vc_vec in vc_embeddings.items():
-        vec = ensure_numpy_array(vc_vec)
-        similarity = np.dot(founder_embedding, vec.T).flatten()[0]
-        narrative = generate_match_narrative(url, vc_summaries[url])
-        message = generate_custom_message(url, vc_summaries[url])
-        results.append({
-            "vc_url": url,
-            "score": round(float(similarity), 4),
-            "why_match": narrative,
-            "messaging_advice": message
+def match_founder_to_vcs(founder_embedding, vc_data):
+    matches = []
+    for vc in vc_data:
+        score = cosine_similarity(founder_embedding, vc['embedding'])
+        matches.append({
+            "vc_url": vc["url"],
+            "score": round(score, 4),
+            "why_match": vc.get("summary", "N/A"),
+            "messaging_advice": f"Emphasize {vc.get('summary', '').split('.')[0]}."
         })
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results
+    return sorted(matches, key=lambda x: x["score"], reverse=True)
 
-def generate_match_narrative(vc_url, vc_summary):
-    prompt = f"A startup founder is evaluating VC firms. Here is a VC firm's summary: {vc_summary}\n\nExplain in 2–3 sentences why this firm would be a good match for a founder working in a complementary space."
-    response = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content.strip()
+def cosine_similarity(vec1, vec2):
+    from numpy import dot
+    from numpy.linalg import norm
+    return dot(vec1, vec2) / (norm(vec1) * norm(vec2))
 
-def generate_custom_message(vc_url, vc_summary):
-    prompt = f"Based on this VC firm's description, suggest a brief outreach strategy or messaging angle that a startup founder should use to connect effectively:\n\n{vc_summary}"
-    response = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content.strip()
+def analyze_gap(vc_data):
+    return "Gap analysis is placeholder: refine based on sector embeddings and cluster density."
 
-def analyze_gap(vc_embeddings, founder_embedding, clusters):
-    prompt = "Analyze this situation: A founder is working on a startup and here are the VC investment clusters around them. Suggest what whitespace (underfunded sectors) may exist based on the embedding clusters and the founder's concept."
-    context = f"Clusters: {str(clusters)}\nFounder embedding position: {founder_embedding[:5]}"
-    response = client.chat.completions.create(
-        model=CHAT_MODEL,
-        messages=[{"role": "user", "content": f"{prompt}\n\n{context}"}]
-    )
-    return response.choices[0].message.content.strip()
-
-def generate_chat_context(founder_summary, vc_summaries, top_matches):
-    context = f"FOUNDER SUMMARY:\n{founder_summary}\n\n"
-    context += "TOP VC MATCHES:\n"
-    for match in top_matches[:3]:
-        context += f"{match['vc_url']}: Score {match['score']}, Match Rationale: {match['why_match']}\n"
-    context += "\nVC SUMMARIES:\n"
-    for url, summary in vc_summaries.items():
-        context += f"{url}: {summary}\n"
+def generate_chat_context(founder_summary, vc_summaries, matches):
+    context = f"Founder Summary:\n{founder_summary}\n\nTop VC Matches:"
+    for m in matches[:3]:
+        vc = next((v for v in vc_summaries if v['url'] == m['vc_url']), None)
+        if vc:
+            context += f"\n- {vc['url']}: {vc['summary']}"
     return context
