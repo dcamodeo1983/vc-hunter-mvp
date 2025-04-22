@@ -1,26 +1,44 @@
 
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
 import numpy as np
+from openai import OpenAI
+import os
 
-def categorize_vcs(vc_embeddings):
-    vc_urls = list(vc_embeddings.keys())
-    vectors = np.array([vec for vec in vc_embeddings.values()])
-    best_k = 2
-    best_score = -1
-    best_labels = []
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    for k in range(2, min(10, len(vectors))):
-        kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
-        labels = kmeans.fit_predict(vectors)
-        score = silhouette_score(vectors, labels)
-        if score > best_score:
-            best_k = k
-            best_score = score
-            best_labels = labels
+def categorize_vcs(vc_embeddings, vc_summaries, n_clusters=5):
+    urls = list(vc_embeddings.keys())
+    vecs = np.array([vc_embeddings[url] for url in urls])
+    model = KMeans(n_clusters=n_clusters, random_state=42)
+    labels = model.fit_predict(vecs)
 
-    result = {}
-    for i, url in enumerate(vc_urls):
-        result[url] = {"cluster": int(best_labels[i])}
+    cluster_groups = {}
+    for i, url in enumerate(urls):
+        label = int(labels[i])
+        cluster_groups.setdefault(label, []).append(url)
 
-    return result
+    cluster_descriptions = {}
+    for label, urls_in_cluster in cluster_groups.items():
+        summaries = [vc_summaries[url] for url in urls_in_cluster]
+        combined = "\n".join(summaries)
+        theme = extract_cluster_theme(combined)
+        cluster_descriptions[label] = {
+            "theme": theme,
+            "vc_urls": urls_in_cluster
+        }
+
+    return labels.tolist(), cluster_descriptions
+
+def extract_cluster_theme(text_block):
+    prompt = f"""
+You are analyzing a group of VC firms based on their summaries.
+
+Here is a set of firm descriptions:\n\n{text_block}
+
+Based on this, name the investment theme that most characterizes this group. Return a short label and one-sentence description.
+"""
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content.strip()
