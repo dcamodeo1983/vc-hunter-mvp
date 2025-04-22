@@ -3,11 +3,8 @@
 import streamlit as st
 import os
 import logging
-from llm_embed_gap_match_chat import (
-    load_or_generate_embeddings,
-    generate_chatbot_response,
-)
-from agents.founder_doc_reader_and_orchestrator import run_full_pipeline  # ✅ Corrected path
+from llm_embed_gap_match_chat import generate_chatbot_response
+from agents.founder_doc_reader_and_orchestrator import run_full_pipeline  # ✅ Fixed import path
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
