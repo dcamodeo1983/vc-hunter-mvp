@@ -1,18 +1,25 @@
+# agents/relationship_agent.py
 
 import networkx as nx
 import matplotlib.pyplot as plt
 
-def build_relationship_graph(co_investments, competitors):
+def build_relationship_graph(vc_embeddings, competitors):
     G = nx.Graph()
 
-    for vc1, vc2, score in co_investments:
-        G.add_edge(vc1, vc2, weight=score, type="collab")
+    # Add all VCs to the graph
+    for vc in vc_embeddings:
+        G.add_node(vc["url"])
 
-    for vc1, vc2, score in competitors:
-        if G.has_edge(vc1, vc2):
-            G[vc1][vc2]["type"] = "both"
-        else:
-            G.add_edge(vc1, vc2, weight=score, type="compete")
+    # Add co-investments as green edges
+    for entry in competitors:
+        vc1 = entry.get("vc1") or entry.get("vc_a") or entry.get("url_a")
+        vc2 = entry.get("vc2") or entry.get("vc_b") or entry.get("url_b")
+        score = entry.get("score", 1.0)
+        if vc1 and vc2:
+            if G.has_edge(vc1, vc2):
+                G[vc1][vc2]["type"] = "both"
+            else:
+                G.add_edge(vc1, vc2, weight=score, type="compete")  # Default to "compete"
 
     return G
 
