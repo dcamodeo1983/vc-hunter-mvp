@@ -1,13 +1,18 @@
 import os
+import time
 import logging
 from openai import OpenAI
 from agents.utils import safe_truncate_text
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-CHAT_MODEL = os.getenv("VC_HUNTER_CHAT_MODEL", "gpt-4")
+
+# Use GPT-3.5 for cost-effective summarization & chat
+CHAT_MODEL = os.getenv("VC_HUNTER_CHAT_MODEL", "gpt-3.5-turbo")
 EMBED_MODEL = os.getenv("VC_HUNTER_EMBED_MODEL", "text-embedding-ada-002")
+GPT4_MODEL = os.getenv("VC_HUNTER_GPT4_MODEL", "gpt-4")  # for gap analysis
 
 def generate_founder_summary(text):
     response = client.chat.completions.create(
@@ -15,6 +20,7 @@ def generate_founder_summary(text):
         messages=[{"role": "user", "content": f"Summarize this founder document: {text}"}]
     )
     summary = response.choices[0].message.content.strip()
+    time.sleep(2)
     embed = generate_embedding(summary)
     return summary, embed
 
@@ -26,6 +32,7 @@ def generate_vc_summary(vc_url, scraped_text, portfolio_info):
         messages=[{"role": "user", "content": f"Summarize this VC firm: {combined}"}]
     )
     summary = response.choices[0].message.content.strip()
+    time.sleep(2)
     embed = generate_embedding(summary)
     return summary, embed
 
@@ -34,12 +41,13 @@ def generate_embedding(text):
         input=[safe_truncate_text(text, max_tokens=7500)],
         model=EMBED_MODEL
     )
+    time.sleep(2)
     return response.data[0].embedding
 
 def cosine_similarity(vec1, vec2):
-    from numpy import dot
-    from numpy.linalg import norm
-    return dot(vec1, vec2) / (norm(vec1) * norm(vec2))
+    vec1 = np.array(vec1)
+    vec2 = np.array(vec2)
+    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
 
 def match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries):
     matches = []
@@ -65,7 +73,7 @@ def analyze_gap(founder_summary, vc_summaries):
         f"VC Summaries:\n" + "\n\n".join(vc_summaries)
     )
     response = client.chat.completions.create(
-        model=CHAT_MODEL,
+        model=GPT4_MODEL,
         messages=[{"role": "user", "content": prompt}]
     )
     return response.choices[0].message.content.strip()
@@ -88,11 +96,6 @@ def generate_chat_context(founder_summary, vc_summaries, matches):
     return context
 
 def load_or_generate_embeddings(entities, embedding_type, generate_func):
-    """
-    entities: list of dicts with keys like 'text' or 'url'
-    embedding_type: 'founder' or 'vc'
-    generate_func: function that returns (summary, embedding)
-    """
     results = []
     for entity in entities:
         try:
@@ -102,6 +105,7 @@ def load_or_generate_embeddings(entities, embedding_type, generate_func):
                 "embedding": embedding,
                 "url": entity.get("url") if isinstance(entity, dict) else "unknown"
             })
+            time.sleep(2)
         except Exception as e:
             logger.warning(f"Failed to generate {embedding_type} embedding for: {entity} | Error: {e}")
     return results
