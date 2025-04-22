@@ -11,7 +11,7 @@ from agents.llm_embed_gap_match_chat import (
 )
 from agents.utils import safe_truncate_text
 from agents.relationship_agent import build_relationship_graph
-from agents.visualization_agent import generate_cluster_plot  # ✅ Corrected import
+from agents.visualization_agent import generate_cluster_plot
 from agents.similar_company_agent import find_similar_companies
 
 logger = logging.getLogger(__name__)
@@ -29,23 +29,25 @@ def run_full_pipeline(founder_doc_bytes, vc_urls):
         vc_summaries = []
         vc_embeddings = []
 
-        for url in vc_urls:
+        for i, url in enumerate(vc_urls):
             raw_text, portfolio_links = scrape_vc_website(url)
             enriched = enrich_portfolio_data(portfolio_links)
             summary, embedding = generate_vc_summary(url, raw_text, enriched)
             vc_summaries.append({"url": url, "summary": summary})
-            vc_embeddings.append({"url": url, "embedding": embedding, "portfolio": enriched})
+            vc_embeddings.append({
+                "url": url,
+                "embedding": embedding,
+                "portfolio": enriched,
+                "summary": summary,               # Ensure summary is present
+                "cluster": i,                      # Dummy cluster for now
+                "theme": f"Cluster {i}"            # Dummy theme for now
+            })
 
         matches = match_founder_to_vcs(founder_embedding, vc_embeddings, vc_summaries)
         gap_insights = analyze_gap(founder_summary, [vc['summary'] for vc in vc_summaries])
         similar_companies = find_similar_companies(founder_embedding, vc_embeddings)
 
-        cluster_plot = generate_cluster_plot(  # ✅ Function name must match export
-            {vc['url']: vc['embedding'] for vc in vc_embeddings},
-            [i for i in range(len(vc_embeddings))],  # Placeholder clusters
-            {vc['url']: vc['summary'] for vc in vc_summaries},
-            {i: {"theme": f"Cluster {i}"} for i in range(len(vc_embeddings))}  # Placeholder themes
-        )
+        cluster_plot = generate_cluster_plot(vc_embeddings)
         relationship_plot = build_relationship_graph(vc_embeddings)
 
         return {
