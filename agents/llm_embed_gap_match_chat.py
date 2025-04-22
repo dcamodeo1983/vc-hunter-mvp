@@ -33,7 +33,7 @@ def generate_vc_summary(vc_url, scraped_text, portfolio_info):
 
 def generate_embedding(text):
     response = client.embeddings.create(
-        input=[safe_truncate_text(text)],
+        input=[safe_truncate_text(text, max_tokens=7500)],
         model=EMBED_MODEL
     )
     return response.data[0].embedding
