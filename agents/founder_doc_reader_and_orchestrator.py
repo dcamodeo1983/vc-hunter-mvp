@@ -48,7 +48,7 @@ def run_orchestration(founder_docs, vc_urls):
     results["vc_summaries"] = [vc["summary"] for vc in vc_data]
 
     # Match founder to VCs
-    matches = match_founder_to_vcs(founder_embedding, vc_data)
+    matches = match_founder_to_vcs(founder_embedding, vc_data, vc_summaries)
     results["matches"] = matches
 
     # Analyze gap
