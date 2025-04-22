@@ -59,8 +59,24 @@ def cosine_similarity(vec1, vec2):
     from numpy.linalg import norm
     return dot(vec1, vec2) / (norm(vec1) * norm(vec2))
 
-def analyze_gap(vc_data):
-    return "Gap analysis is placeholder: refine based on sector embeddings and cluster density."
+def analyze_gap(founder_summary, vc_summaries):
+    """Analyzes the gap between the founder summary and VC summaries."""
+    from openai import OpenAI
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    prompt = (
+        "Given the following founder's summary and the summaries of various VCs, "
+        "analyze the whitespace or mismatch in themes or focus areas. Highlight any unmet needs or gaps.\n\n"
+        f"Founder Summary:\n{founder_summary}\n\n"
+        f"VC Summaries:\n" + "\n\n".join(vc_summaries)
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )
+    return response.choices[0].message.content.strip()
+
 
 def generate_chat_context(founder_summary, vc_summaries, matches):
     context = f"Founder Summary:\n{founder_summary}\n\nTop VC Matches:"
